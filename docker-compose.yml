@@ -1,0 +1,33 @@
+version: '2'
+services:
+
+### MySQL(for test) Container ###############################
+  db:
+    image: mysql:latest
+    environment:
+      TZ: Asia/Tokyo
+      MYSQL_DATABASE: sample_db
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+
+### Nginx Server Container ##################################
+  nginx:
+    build: ./docker/nginx
+    environment:
+      TZ: Asia/Tokyo
+    ports:
+      - "5111:80"
+    links:
+      - app:app
+    volumes_from:
+      - app
+
+### php-fpm Container ##############################
+  app:
+    build: .
+    environment:
+      TZ: Asia/Tokyo
+    links:
+      - "db:mysql"
+    env_file: src/.env.example
+    volumes:
+      - ./src:/var/www/html
