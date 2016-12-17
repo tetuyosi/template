@@ -16,4 +16,9 @@ RUN set -ex \
 COPY ./src /var/www/html
 WORKDIR /var/www/html
 
+ADD /docker/php/composer-cache.tar.gz /var/www/
+RUN set -ex \
+  && composer install --no-dev \
+  && rm -rf .composer
+
 CMD ["php-fpm"]
