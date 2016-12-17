@@ -1,0 +1,49 @@
+{
+  "AWSEBDockerrunVersion": 2,
+  "containerDefinitions": [
+    {
+      "name": "app",
+      "image": "<DOCKER-REGISTRY>/template:app-<REVISION>",
+      "environment": [
+        { "name": "TZ", "value": "Asia/Tokyo" }
+      ],
+      "essential": true,
+      "memory": 512,
+      "mountPoints": [
+        {
+          "sourceVolume": "awseb-logs-app",
+          "containerPath": "/var/www/html/storage/logs"
+        }
+      ]
+    },
+    {
+      "name": "nginx",
+      "image": "<DOCKER-REGISTRY>/template:nginx-<REVISION>",
+      "environment": [
+        { "name": "TZ", "value": "Asia/Tokyo" }
+      ],
+      "essential": true,
+      "memory": 64,
+      "portMappings": [
+        {
+          "hostPort": 80,
+          "containerPort": 80
+        }
+      ],
+      "links": [
+        "app"
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "awseb-logs-nginx",
+          "containerPath": "/var/log/nginx"
+        }
+      ],
+      "volumesFrom": [
+        {
+          "sourceContainer": "app"
+        }
+      ]
+    }
+  ]
+}
