@@ -1,0 +1,68 @@
+image: realworldinc/ci_docker
+
+variables:
+  GIT_STRATEGY: fetch
+  EB_APP_NAME: template
+  ENVIRONMENT_NAME: template-env
+
+stages:
+  - build
+  - deploy
+
+docker_app:
+  stage: build
+  script:
+    - docker build -t ${DOCKER_REGISTRY}/${EB_APP_NAME}:app-latest .
+    - docker tag ${DOCKER_REGISTRY}/${EB_APP_NAME}:app-latest ${DOCKER_REGISTRY}/${EB_APP_NAME}:app-$CI_BUILD_REF
+    - $(aws ecr get-login --region ap-northeast-1)
+    - docker push ${DOCKER_REGISTRY}/${EB_APP_NAME}:app-$CI_BUILD_REF
+    - docker push ${DOCKER_REGISTRY}/${EB_APP_NAME}:app-latest
+  after_script:
+    - docker rmi -f ${DOCKER_REGISTRY}/${EB_APP_NAME}:app-$CI_BUILD_REF
+  only:
+    - development
+
+docker_nginx:
+  stage: build
+  script:
+    - docker build -t ${DOCKER_REGISTRY}/${EB_APP_NAME}:nginx-latest ./docker/nginx/
+    - docker tag ${DOCKER_REGISTRY}/${EB_APP_NAME}:nginx-latest ${DOCKER_REGISTRY}/${EB_APP_NAME}:nginx-$CI_BUILD_REF
+    - $(aws ecr get-login --region ap-northeast-1)
+    - docker push ${DOCKER_REGISTRY}/${EB_APP_NAME}:nginx-$CI_BUILD_REF
+    - docker push ${DOCKER_REGISTRY}/${EB_APP_NAME}:nginx-latest
+  after_script:
+    - docker rmi -f ${DOCKER_REGISTRY}/${EB_APP_NAME}:nginx-$CI_BUILD_REF
+  only:
+    - development
+
+.deploy: &deploy_definition
+  stage: deploy
+  script:
+    - SOURCE_BUNDLE="$CI_BUILD_REF_NAME-$CI_BUILD_REF"
+    - DESCRIPTION=`git log --oneline -1`
+    - sed -e "s/<REVISION>/$CI_BUILD_REF/" -e "s/<DOCKER-REGISTRY>/$DOCKER_REGISTRY/" < deploy/$CI_BUILD_REF_NAME/Dockerrun.aws.json > Dockerrun.aws.json
+    - mkdir -p .elasticbeanstalk/app_versions
+    - zip .elasticbeanstalk/app_versions/$SOURCE_BUNDLE -r Dockerrun.aws.json .ebextensions
+    - aws s3 cp .elasticbeanstalk/app_versions/"${SOURCE_BUNDLE}".zip "s3://$S3_BUCKET/$EB_APP_NAME/$SOURCE_BUNDLE.zip"
+    - aws elasticbeanstalk delete-application-version
+        --application-name $EB_APP_NAME
+        --version-label $SOURCE_BUNDLE
+        --delete-source-bundle
+        --region $EB_REGION
+    - aws elasticbeanstalk create-application-version
+        --application-name $EB_APP_NAME
+        --description "${DESCRIPTION}"
+        --version-label $SOURCE_BUNDLE
+        --source-bundle S3Bucket="$S3_BUCKET",S3Key="$EB_APP_NAME"/"$SOURCE_BUNDLE".zip
+        --region $EB_REGION
+    - aws elasticbeanstalk update-environment
+        --environment-name $ENVIRONMENT_NAME
+        --version-label $SOURCE_BUNDLE
+        --region $EB_REGION
+
+deploy_development:
+  <<: *deploy_definition
+  environment: development
+  only:
+    - development
+
