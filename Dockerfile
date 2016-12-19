@@ -21,4 +21,6 @@ RUN set -ex \
   && composer install --no-dev \
   && rm -rf .composer
 
+VOLUME ["/var/www/html"]
+
 CMD ["php-fpm"]
